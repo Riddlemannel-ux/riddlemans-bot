@@ -1,1 +1,101 @@
 # riddlemans-bot
+{
+  "name": "whatsapp-bot",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "@whiskeysockets/baileys": "^6.7.0"
+  }
+}const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason
+} = require("@whiskeysockets/baileys")
+
+const P = "!" // PREFIX
+
+async function startBot() {
+
+    const { state, saveCreds } = await useMultiFileAuthState("./auth")
+
+    const sock = makeWASocket({
+        auth: state,
+        printQRInTerminal: true,
+        browser: ["Atlas Bot", "Chrome", "1.0.0"]
+    })
+
+    // Save session
+    sock.ev.on("creds.update", saveCreds)
+
+    // Auto reconnect
+    sock.ev.on("connection.update", (update) => {
+        const { connection, lastDisconnect } = update
+
+        if (connection === "close") {
+            const shouldReconnect =
+                lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut
+
+            if (shouldReconnect) {
+                startBot()
+            }
+        }
+
+        if (connection === "open") {
+            console.log("✅ Bot is now online!")
+        }
+    })
+
+    // Message handler
+    sock.ev.on("messages.upsert", async (m) => {
+        const msg = m.messages[0]
+        if (!msg.message || msg.key.fromMe) return
+
+        const body =
+            msg.message.conversation ||
+            msg.message.extendedTextMessage?.text ||
+            ""
+
+        const from = msg.key.remoteJid
+
+        // COMMAND SYSTEM
+        if (body.startsWith(P)) {
+            const command = body.slice(1).trim().split(" ")[0].toLowerCase()
+
+            switch (command) {
+
+                case "hi":
+                    await sock.sendMessage(from, {
+                        text: "👋 Hello! I am your advanced WhatsApp bot"
+                    })
+                    break
+
+                case "menu":
+                    await sock.sendMessage(from, {
+                        text:
+`🤖 *BOT MENU*
+
+⚡ ${P}hi - Test bot
+📜 ${P}menu - Show menu
+🔥 ${P}ping - Check speed`
+                    })
+                    break
+
+                case "ping":
+                    await sock.sendMessage(from, {
+                        text: "🏓 Pong! Bot is alive"
+                    })
+                    break
+
+                default:
+                    await sock.sendMessage(from, {
+                        text: "❌ Unknown command. Type !menu"
+                    })
+            }
+        }
+    })
+}
+
+startBot()
